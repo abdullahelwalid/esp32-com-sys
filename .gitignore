@@ -3,3 +3,4 @@ build/
 log.txt
 logs.txt
 .cache
+.cache/

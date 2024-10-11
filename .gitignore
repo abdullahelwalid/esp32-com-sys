@@ -52,6 +52,6 @@ Mkfile.old
 dkms.conf
 .cache
 .vscode
-build
+build/
 log.txt
 logs.txt

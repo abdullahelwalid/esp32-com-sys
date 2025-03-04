@@ -61,15 +61,7 @@ The core logic of the intercom system is implemented in `revtalk.c`:
 - **FreeRTOS Tasks:** Handles audio processing and communication
 - **Noise Filtering:** Applies basic DSP techniques to enhance clarity
 
-### **Audio Processing (`audio.c`)**
-- Captures microphone input via **I2S**
-- Filters background noise and normalizes volume
-- Streams processed audio to the communication module
 
-### **Communication (`comms.c`)**
-- Handles Bluetooth or Wi-Fi transmission
-- Implements low-latency packet-based streaming
-- Supports multiple riders in a group network
 
 ## Hardware Setup
 ### **ESP32 Pin Configuration**

@@ -55,3 +55,22 @@ dkms.conf
 build/
 log.txt
 logs.txt
+.DS_Store
+/build/
+/build_*/      
+sdkconfig       # (auto-generated config)  
+sdkconfig.old   # (previous config backup)
+
+*.bin
+
+.idea/
+*.swp
+Thumbs.dbo
+
+*.log
+*.tmp
+
+pytest_embedded_log/
+dependencies.lock
+
+*.wav

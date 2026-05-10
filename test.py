@@ -4,7 +4,7 @@ import struct
 import time
 
 SERIAL_PORT = '/dev/cu.usbserial-0001'       # adjust to your port
-BAUD = 1000000
+BAUD = 921600
 SAMPLE_RATE = 8000         # match your ESP sampling rate
 SAMPLE_WIDTH = 4           # 4 bytes per sample (int32)
 DURATION_SEC = 10           # how many seconds to record

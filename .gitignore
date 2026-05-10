@@ -58,8 +58,6 @@ logs.txt
 .DS_Store
 /build/
 /build_*/      
-sdkconfig       # (auto-generated config)  
-sdkconfig.old   # (previous config backup)
 
 *.bin
 

@@ -7,9 +7,9 @@
 #include "esp_event.h"
 #include "nvs_flash.h"
 #include "esp_netif.h"
+#include "esp_netif_types.h"
 
-
-
+#include "udp_stream.h"
 /* WIFI AP Config */
 #define WIFI_SSID "Revtalk"
 #define WIFI_PASSWORD "revpassword"
@@ -33,8 +33,20 @@ static void wifi_event_handler(void* arg, esp_event_base_t event_base,
         wifi_event_ap_stadisconnected_t* event = (wifi_event_ap_stadisconnected_t*) event_data;
 		// Clear the stored IP address of the disconnected station
 		ip_addrs[event->aid - 1][0] = '\0';
+        udp_stream_on_sta_disconnected(event->mac);
         ESP_LOGI(TAG, "station "MACSTR" leave, AID=%d, reason=%d",
                  MAC2STR(event->mac), event->aid, event->reason);
+    }
+}
+
+static void ip_event_handler(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data)
+{
+    (void)arg;
+    (void)event_base;
+
+    if (event_id == IP_EVENT_AP_STAIPASSIGNED) {
+        ip_event_ap_staipassigned_t *ev = (ip_event_ap_staipassigned_t *)event_data;
+        udp_stream_set_client_from_ap_sta(&ev->ip, ev->mac);
     }
 }
 
@@ -51,12 +63,20 @@ void wifi_init(void){
     ESP_ERROR_CHECK(esp_event_loop_create_default());
     esp_netif_create_default_wifi_ap();
 
+    /* UDP socket must exist before Wi-Fi starts, or a fast STA can get DHCP before we bind. */
+    udp_stream_start();
+
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(esp_wifi_init(&cfg));
 
     ESP_ERROR_CHECK(esp_event_handler_instance_register(WIFI_EVENT,
                                                         ESP_EVENT_ANY_ID,
                                                         &wifi_event_handler,
+                                                        NULL,
+                                                        NULL));
+    ESP_ERROR_CHECK(esp_event_handler_instance_register(IP_EVENT,
+                                                        IP_EVENT_AP_STAIPASSIGNED,
+                                                        &ip_event_handler,
                                                         NULL,
                                                         NULL));
 	wifi_config_t wifi_config = {

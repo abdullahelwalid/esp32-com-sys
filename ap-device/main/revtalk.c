@@ -7,13 +7,12 @@
 #include "ap_wifi.h"
 
 
-
-
 void app_main(void) {
     //ESP_LOGI("Main", "Starting up...");
 
 	wifi_init();
-	
+
     i2s_init();  // Initialize I2S for microphone and LED
-    xTaskCreatePinnedToCore(&MicReadTask, "Mic Read Task", 8192, NULL, 5, NULL, 1);
+    /* Higher priority reduces Wi-Fi jitter vs other tasks when streaming UDP. */
+    xTaskCreatePinnedToCore(&MicReadTask, "Mic Read Task", 8192, NULL, 8, NULL, 1);
 }

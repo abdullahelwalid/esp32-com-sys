@@ -30,6 +30,9 @@ static i2s_chan_handle_t rx_handle;  // handle for I2S microphone input
 
 static i2s_chan_config_t chan_cfg = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_AUTO, I2S_ROLE_MASTER);
 
+/* Slightly stronger than >>16 if mic energy sits low (saturate to int16). */
+#define MIC_PCM_SHIFT 15
+
 static void signal_led_set(bool on)
 {
 #if SIGNAL_LED_ACTIVE_LOW
@@ -47,10 +50,11 @@ static void signal_led_init(void)
 }
 
 void i2s_init() {
-	// Start UDP hello listener (host sends any packet first).
-	udp_stream_start();
     // Initialize led
     signal_led_init();
+    chan_cfg.dma_desc_num = 10;
+    chan_cfg.dma_frame_num = 512;
+
     esp_err_t err = i2s_new_channel(&chan_cfg, NULL, &rx_handle);  // Use rx_handle
     if (err != ESP_OK) {
         ESP_LOGE("I2S", "Failed to create I2S channel: %d", err);
@@ -111,7 +115,14 @@ void MicReadTask(void *param) {
 
         // Convert 32-bit I2S samples to 16-bit PCM for UDP (saves bandwidth).
         for (int i = 0; i < samples_read; i++) {
-            out16[i] = (int16_t)(buffer[i] >> 16);
+            int32_t t = buffer[i] >> MIC_PCM_SHIFT;
+            if (t > 32767) {
+                t = 32767;
+            }
+            if (t < -32768) {
+                t = -32768;
+            }
+            out16[i] = (int16_t)t;
         }
 
         // One UDP packet per chunk: [u32 seq LE][int16 PCM...]

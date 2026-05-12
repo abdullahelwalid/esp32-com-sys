@@ -1,9 +1,7 @@
 import wave
 import struct
-import time
 import socket
 
-ESP_IP = "192.168.4.1"      # default ESP-IDF SoftAP IP
 UDP_PORT = 3333
 SAMPLE_RATE = 16000         # must match ESP SAMPLE_RATE
 SAMPLE_WIDTH = 2            # int16 payload (bytes/sample)
@@ -14,9 +12,8 @@ sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 sock.bind(("", UDP_PORT))
 sock.settimeout(2.0)
 
-# "Hello" so ESP learns our IP:port to stream to.
-sock.sendto(b"hello", (ESP_IP, UDP_PORT))
-print("Recording UDP for", DURATION_SEC, "seconds from", f"{ESP_IP}:{UDP_PORT}")
+# Join Wi‑Fi to this AP first. AP targets the last STA that completed DHCP (your laptop).
+print("Recording UDP for", DURATION_SEC, "seconds on local port", UDP_PORT, "(AP sends after DHCP)")
 
 need_bytes = N_SAMPLES * SAMPLE_WIDTH
 data = bytearray()

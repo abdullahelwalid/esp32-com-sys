@@ -3,27 +3,35 @@
 #include <string.h>
 #include <errno.h>
 
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
 #include "esp_log.h"
 
 #include "lwip/sockets.h"
 #include "lwip/inet.h"
+#include "esp_mac.h"
 
 static const char *TAG = "udp_stream";
 
 static int s_sock = -1;
 static struct sockaddr_in s_client_addr;
 static volatile bool s_has_client = false;
+static uint8_t s_stream_mac[6];
+static bool s_have_stream_mac = false;
 
-static void udp_hello_task(void *arg)
+void udp_stream_start(void)
 {
-    (void)arg;
+    static bool started = false;
+    if (started) {
+        return;
+    }
+    started = true;
+
+    s_has_client = false;
+    s_have_stream_mac = false;
+    memset(&s_client_addr, 0, sizeof(s_client_addr));
 
     s_sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
     if (s_sock < 0) {
         ESP_LOGE(TAG, "socket() failed: errno=%d", errno);
-        vTaskDelete(NULL);
         return;
     }
 
@@ -37,45 +45,46 @@ static void udp_hello_task(void *arg)
         ESP_LOGE(TAG, "bind() failed: errno=%d", errno);
         close(s_sock);
         s_sock = -1;
-        vTaskDelete(NULL);
         return;
     }
 
-    ESP_LOGI(TAG, "listening for hello on UDP port %d", UDP_STREAM_PORT);
+    int sndbuf = 256 * 1024;
+    (void)setsockopt(s_sock, SOL_SOCKET, SO_SNDBUF, &sndbuf, sizeof(sndbuf));
 
-    uint8_t buf[64];
-    while (1) {
-        struct sockaddr_in from = {0};
-        socklen_t from_len = sizeof(from);
-        int r = recvfrom(s_sock, buf, sizeof(buf), 0, (struct sockaddr *)&from, &from_len);
-        if (r < 0) {
-            ESP_LOGE(TAG, "recvfrom() failed: errno=%d", errno);
-            vTaskDelay(pdMS_TO_TICKS(200));
-            continue;
-        }
-
-        // Any packet counts as hello; remember sender as stream destination.
-        s_client_addr = from;
-        s_has_client = true;
-
-        char ip[16];
-        inet_ntoa_r(from.sin_addr, ip, sizeof(ip));
-        ESP_LOGI(TAG, "hello from %s:%d (stream target set)", ip, ntohs(from.sin_port));
-    }
+    ESP_LOGI(TAG, "UDP stream socket ready on port %d (target from DHCP)", UDP_STREAM_PORT);
 }
 
-void udp_stream_start(void)
+void udp_stream_set_client_from_ap_sta(const esp_ip4_addr_t *ip, const uint8_t mac[6])
 {
-    static bool started = false;
-    if (started) {
+    if (s_sock < 0 || ip == NULL || mac == NULL) {
         return;
     }
-    started = true;
 
-    s_has_client = false;
     memset(&s_client_addr, 0, sizeof(s_client_addr));
+    s_client_addr.sin_family = AF_INET;
+    s_client_addr.sin_port = htons(UDP_STREAM_PORT);
+    s_client_addr.sin_addr.s_addr = ip->addr;
 
-    xTaskCreatePinnedToCore(udp_hello_task, "udp_hello", 4096, NULL, 5, NULL, 0);
+    memcpy(s_stream_mac, mac, 6);
+    s_have_stream_mac = true;
+    s_has_client = true;
+
+    char ipstr[16];
+    inet_ntoa_r(s_client_addr.sin_addr, ipstr, sizeof(ipstr));
+    ESP_LOGI(TAG, "stream target set (DHCP) %s:%d " MACSTR, ipstr, UDP_STREAM_PORT, MAC2STR(mac));
+}
+
+void udp_stream_on_sta_disconnected(const uint8_t mac[6])
+{
+    if (!s_have_stream_mac || mac == NULL) {
+        return;
+    }
+    if (memcmp(mac, s_stream_mac, 6) != 0) {
+        return;
+    }
+    s_has_client = false;
+    s_have_stream_mac = false;
+    ESP_LOGI(TAG, "stream target cleared (STA disconnected)");
 }
 
 bool udp_stream_has_client(void)
@@ -89,14 +98,12 @@ int udp_stream_send_seq_payload(uint32_t seq, const void *payload, size_t payloa
         return 0;
     }
 
-    // Packet = [seq_le][payload]
     uint8_t hdr[4];
     hdr[0] = (uint8_t)(seq & 0xFF);
     hdr[1] = (uint8_t)((seq >> 8) & 0xFF);
     hdr[2] = (uint8_t)((seq >> 16) & 0xFF);
     hdr[3] = (uint8_t)((seq >> 24) & 0xFF);
 
-    // Use a small stack buffer when possible; otherwise send in 2 calls.
     if (payload_len <= 1400) {
         uint8_t pkt[4 + 1400];
         memcpy(pkt, hdr, 4);
@@ -106,7 +113,8 @@ int udp_stream_send_seq_payload(uint32_t seq, const void *payload, size_t payloa
     }
 
     int sent = sendto(s_sock, hdr, 4, 0, (struct sockaddr *)&s_client_addr, sizeof(s_client_addr));
-    if (sent < 0) return sent;
+    if (sent < 0) {
+        return sent;
+    }
     return sendto(s_sock, payload, (int)payload_len, 0, (struct sockaddr *)&s_client_addr, sizeof(s_client_addr));
 }
-

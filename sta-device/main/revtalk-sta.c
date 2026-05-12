@@ -17,5 +17,6 @@ void app_main(void)
     sta_wifi_init();
     signal_led_init();
     tx_i2s_init();
+    tx_i2s_play_test_tone();
     udp_audio_rx_start();
 }

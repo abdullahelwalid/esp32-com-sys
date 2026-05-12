@@ -1,0 +1,9 @@
+# Host clangd cannot parse Xtensa GCC-only flags from ESP-IDF's compile_commands.json.
+# Stripping them fixes bogus "Unknown argument" / missing newlib header noise in the editor.
+# Firmware builds are unchanged (still use xtensa-esp32-elf-gcc via idf.py).
+CompileFlags:
+  Remove:
+    - -mlongcalls
+    - -fno-shrink-wrap
+    - -fstrict-volatile-bitfields
+    - -fno-tree-switch-conversion
